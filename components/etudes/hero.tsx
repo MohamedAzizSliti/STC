@@ -22,11 +22,18 @@ export function EtudesHero() {
             we guide you every step of the way.
           </p>
 
-          <div className="mt-8 flex items-center gap-3">
-            <Button size="lg" className="bg-white text-stc-blue hover:bg-white/90 gap-2">
-              <MapPin className="h-4 w-4" />
-              Explore Destinations
-              <ArrowDown className="h-4 w-4" />
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <Button size="lg" className="bg-white text-stc-blue hover:bg-white/90 gap-2" asChild>
+              <a href="#destinations">
+                <MapPin className="h-4 w-4" />
+                Explore Destinations
+                <ArrowDown className="h-4 w-4" />
+              </a>
+            </Button>
+            <Button size="lg" variant="outline" className="border-white/50 text-white hover:bg-white/10 gap-2" asChild>
+              <Link href="/etudes/dashboard">
+                View My Applications
+              </Link>
             </Button>
           </div>
         </div>

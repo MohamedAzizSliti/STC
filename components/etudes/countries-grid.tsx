@@ -13,7 +13,7 @@ export function CountriesGrid() {
   const selected = countries.find((c) => c.id === selectedCountry);
 
   return (
-    <section className="py-16 lg:py-24 bg-background">
+    <section id="destinations" className="py-16 lg:py-24 bg-background">
       <div className="mx-auto max-w-7xl px-4 lg:px-8">
         <div className="text-center">
           <h2 className="text-3xl font-bold tracking-tight text-foreground md:text-4xl text-balance">
