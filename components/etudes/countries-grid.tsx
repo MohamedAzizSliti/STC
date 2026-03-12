@@ -1,14 +1,23 @@
 "use client";
 
-import { useState } from "react";
-import { countries } from "@/lib/data";
+import { useState, useEffect } from "react";
+import type { Country } from "@/lib/data";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Loader2 } from "lucide-react";
 import { CountryDetail } from "./country-detail";
 
 export function CountriesGrid() {
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/studies")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setCountries(Array.isArray(data) ? data : []))
+      .finally(() => setLoading(false));
+  }, []);
 
   const selected = countries.find((c) => c.id === selectedCountry);
 
@@ -24,6 +33,15 @@ export function CountriesGrid() {
           </p>
         </div>
 
+        {loading ? (
+          <div className="mt-12 flex justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : countries.length === 0 ? (
+          <div className="mt-12 rounded-lg border border-border bg-muted/30 p-12 text-center text-muted-foreground">
+            No study destinations available yet. Check back later.
+          </div>
+        ) : (
         <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {countries.map((country) => (
             <Card
@@ -41,7 +59,9 @@ export function CountriesGrid() {
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 <div className="absolute bottom-3 left-4 flex items-center gap-2">
-                  <span className="text-2xl" role="img" aria-label={`${country.name} flag`}>{country.flag}</span>
+                  {"flag" in country && country.flag && (
+                    <span className="text-2xl" role="img" aria-label={`${country.name} flag`}>{country.flag}</span>
+                  )}
                   <h3 className="text-lg font-semibold text-white">{country.name}</h3>
                 </div>
               </div>
@@ -59,6 +79,7 @@ export function CountriesGrid() {
             </Card>
           ))}
         </div>
+        )}
       </div>
 
       {/* Country Detail Modal */}

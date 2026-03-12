@@ -1,8 +1,19 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ArrowRight, GraduationCap, Globe, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function HomeHero() {
+  const [studyCount, setStudyCount] = useState<number | null>(null);
+  useEffect(() => {
+    fetch("/api/studies")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setStudyCount(Array.isArray(data) ? data.length : 0));
+  }, []);
+
+  const countriesLabel = studyCount != null && studyCount > 0 ? `${studyCount}+ Countries` : "9+ Countries";
   return (
     <section className="relative overflow-hidden bg-foreground text-background">
       {/* Subtle pattern overlay */}
@@ -33,7 +44,7 @@ export function HomeHero() {
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
-            <Button asChild size="lg" variant="outline" className="gap-2 border-background/20 text-background hover:bg-background/10 hover:text-background">
+            <Button asChild size="lg" variant="outline" className="gap-2 border-background/20 text-black hover:bg-background/10 hover:text-background">
               <Link href="/jobs">
                 <Globe className="h-5 w-5" />
                 Find Opportunities
@@ -44,7 +55,7 @@ export function HomeHero() {
           {/* Feature pills */}
           <div className="mt-12 flex flex-wrap items-center justify-center gap-4">
             {[
-              { label: "9+ Countries", color: "bg-stc-blue/20 text-stc-blue" },
+              { label: countriesLabel, color: "bg-stc-blue/20 text-stc-blue" },
               { label: "500+ Universities", color: "bg-stc-green/20 text-stc-green" },
               { label: "1000+ Companies", color: "bg-stc-purple/20 text-stc-purple" },
             ].map((pill) => (

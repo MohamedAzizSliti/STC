@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -16,7 +17,19 @@ import {
   MapPin,
   Calendar,
   ArrowRight,
+  CheckCircle2,
+  Upload,
 } from "lucide-react";
+
+type DocumentRecord = {
+  id: string;
+  document_type: string;
+  file_name: string;
+  file_url: string;
+  file_size: number | null;
+  upload_date: string;
+  verified: boolean;
+};
 
 type Application = {
   id: string;
@@ -36,6 +49,9 @@ export default function EtudesDashboardPage() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [paymentProofByAppId, setPaymentProofByAppId] = useState<Record<string, DocumentRecord>>({});
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -50,8 +66,8 @@ export default function EtudesDashboardPage() {
 
   useEffect(() => {
     if (!authChecked) return;
-    fetch("/api/applications")
-      .then((res) => {
+    Promise.all([
+      fetch("/api/applications").then((res) => {
         if (res.status === 401) {
           router.replace("/login?redirect=/etudes/dashboard");
           return null;
@@ -61,12 +77,70 @@ export default function EtudesDashboardPage() {
           return null;
         }
         return res.json();
-      })
-      .then((data) => {
-        if (Array.isArray(data)) setApplications(data);
+      }),
+      fetch("/api/documents").then((res) => (res.ok ? res.json() : [])),
+    ])
+      .then(([appsData, docsData]: [Application[] | null, DocumentRecord[]]) => {
+        if (Array.isArray(appsData)) setApplications(appsData);
+        if (Array.isArray(docsData)) {
+          const byApp: Record<string, DocumentRecord> = {};
+          for (const doc of docsData) {
+            if (doc.document_type.startsWith("Payment Proof - ")) {
+              const appId = doc.document_type.replace("Payment Proof - ", "").trim();
+              if (!byApp[appId] || new Date(doc.upload_date) > new Date(byApp[appId].upload_date)) {
+                byApp[appId] = doc;
+              }
+            }
+          }
+          setPaymentProofByAppId(byApp);
+        }
       })
       .finally(() => setLoading(false));
   }, [authChecked, router]);
+
+  const triggerPaymentUpload = (applicationId: string) => {
+    setUploadingId(applicationId);
+    fileInputRef.current?.click();
+  };
+
+  const handlePaymentFileChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const id = uploadingId;
+    setUploadingId(null);
+    const file = e.target.files?.[0];
+    if (!file || !id) return;
+    e.target.value = "";
+    const formData = new FormData();
+    formData.set("file", file);
+    formData.set("document_type", `Payment Proof - ${id}`);
+    const res = await fetch("/api/documents/upload", {
+      method: "POST",
+      body: formData,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.id) {
+      setPaymentProofByAppId((prev) => ({
+        ...prev,
+        [id]: {
+          id: data.id,
+          document_type: data.document_type,
+          file_name: data.file_name,
+          file_url: data.file_url,
+          file_size: data.file_size,
+          upload_date: data.upload_date,
+          verified: data.verified ?? false,
+        },
+      }));
+      toast.success("Payment proof uploaded", {
+        description: `${file.name} has been saved. We will verify it shortly.`,
+      });
+    } else {
+      toast.error("Upload failed", {
+        description: data.message || data.detail || "Please try again.",
+      });
+    }
+  };
 
   if (!authChecked || loading) {
     return (
@@ -85,6 +159,13 @@ export default function EtudesDashboardPage() {
       <Navbar />
       <main className="flex-1 bg-secondary">
         <div className="mx-auto max-w-4xl px-4 py-8 lg:py-12">
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept=".pdf,.jpg,.jpeg,.png,.webp"
+            onChange={handlePaymentFileChange}
+          />
           <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h1 className="text-2xl font-bold text-foreground">
@@ -181,15 +262,57 @@ export default function EtudesDashboardPage() {
                           )}
                         </div>
                       </div>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link
-                          href={`/etudes/apply?country=${app.target_country}`}
-                          className="gap-1"
-                        >
-                          View
-                          <ArrowRight className="h-3.5 w-3.5" />
-                        </Link>
-                      </Button>
+                      <div className="flex flex-col gap-2">
+                        <Button variant="outline" size="sm" asChild>
+                          <Link
+                            href={`/etudes/apply?country=${app.target_country}`}
+                            className="gap-1"
+                          >
+                            View
+                            <ArrowRight className="h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                        <div className="flex flex-col gap-1.5">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={!!uploadingId && uploadingId !== app.id}
+                            onClick={() => triggerPaymentUpload(app.id)}
+                            className={
+                              paymentProofByAppId[app.id]
+                                ? "border-green-500/50 bg-green-500/5 text-green-700 dark:text-green-400"
+                                : ""
+                            }
+                          >
+                            {paymentProofByAppId[app.id] ? (
+                              <span className="flex items-center gap-1.5">
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Proof uploaded
+                              </span>
+                            ) : uploadingId === app.id ? (
+                              <span className="flex items-center gap-1">
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                Uploading…
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1">
+                                <Upload className="h-3.5 w-3.5" />
+                                Upload payment proof
+                              </span>
+                            )}
+                          </Button>
+                          {paymentProofByAppId[app.id] && (
+                            <p className="text-xs text-muted-foreground">
+                              {paymentProofByAppId[app.id].file_name}
+                              {" · "}
+                              {new Date(
+                                paymentProofByAppId[app.id].upload_date
+                              ).toLocaleDateString()}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

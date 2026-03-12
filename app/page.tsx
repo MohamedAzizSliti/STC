@@ -2,6 +2,7 @@ import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import { HomeHero } from "@/components/home/hero";
 import { HomePortals } from "@/components/home/portals";
+import { HomeStudiesSection } from "@/components/home/studies-section";
 import { HomeStats } from "@/components/home/stats";
 import { HomeTrust } from "@/components/home/trust";
 
@@ -11,6 +12,7 @@ export default function HomePage() {
       <Navbar />
       <main className="flex-1">
         <HomeHero />
+        <HomeStudiesSection />
         <HomePortals />
         <HomeStats />
         <HomeTrust />

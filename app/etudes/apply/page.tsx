@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
-import { countries } from "@/lib/data";
+import { countries as staticCountries } from "@/lib/data";
+import type { Country } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,15 +15,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { createClient } from "@/lib/supabase/client";
+import { toast } from "sonner";
 import {
   Upload,
   FileText,
   Check,
   ArrowLeft,
   ArrowRight,
-  CreditCard,
-  Shield,
+  Landmark,
   Loader2,
+  CheckCircle2,
 } from "lucide-react";
 
 const TOTAL_STEPS = 4;
@@ -61,13 +63,16 @@ function ApplyContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const countryId = searchParams.get("country") || "portugal";
+  const [studyDestinations, setStudyDestinations] = useState<Country[]>([]);
+  const [studiesLoaded, setStudiesLoaded] = useState(false);
+  const countries = studyDestinations.length > 0 ? studyDestinations : staticCountries;
   const country = countries.find((c) => c.id === countryId) || countries[0];
 
   const [authChecked, setAuthChecked] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [step, setStep] = useState(1);
-  const [uploadedDocs, setUploadedDocs] = useState<string[]>([]);
+  const [uploadedDocRecords, setUploadedDocRecords] = useState<Record<string, { file_name: string; upload_date: string }>>({});
   const [uploadingType, setUploadingType] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -83,6 +88,13 @@ function ApplyContent() {
   const [educationLevel, setEducationLevel] = useState("");
   const [platform, setPlatform] = useState("");
   const [motivation, setMotivation] = useState("");
+
+  useEffect(() => {
+    fetch("/api/studies")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setStudyDestinations(Array.isArray(data) ? data : []))
+      .finally(() => setStudiesLoaded(true));
+  }, []);
 
   useEffect(() => {
     const supabase = createClient();
@@ -180,9 +192,26 @@ function ApplyContent() {
 
   const progress = (step / TOTAL_STEPS) * 100;
 
+  useEffect(() => {
+    if (step !== 2 || !profileLoaded) return;
+    fetch("/api/documents")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((list: { document_type: string; file_name: string; upload_date: string }[]) => {
+        const byType: Record<string, { file_name: string; upload_date: string }> = {};
+        for (const d of list) {
+          if (documentTypes.includes(d.document_type)) {
+            if (!byType[d.document_type] || new Date(d.upload_date) > new Date(byType[d.document_type].upload_date)) {
+              byType[d.document_type] = { file_name: d.file_name, upload_date: d.upload_date };
+            }
+          }
+        }
+        setUploadedDocRecords((prev) => ({ ...prev, ...byType }));
+      });
+  }, [step, profileLoaded]);
+
   const triggerUpload = (documentType: string) => {
     setUploadingType(documentType);
-    fileInputRef.current?.click();
+    setTimeout(() => fileInputRef.current?.click(), 0);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -194,12 +223,27 @@ function ApplyContent() {
     const formData = new FormData();
     formData.set("file", file);
     formData.set("document_type", type);
-    const res = await fetch("/api/documents/upload", {
-      method: "POST",
-      body: formData,
-    });
-    if (res.ok) {
-      setUploadedDocs((prev) => (prev.includes(type) ? prev : [...prev, type]));
+    try {
+      const res = await fetch("/api/documents/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.file_name) {
+        setUploadedDocRecords((prev) => ({
+          ...prev,
+          [type]: { file_name: data.file_name, upload_date: data.upload_date || new Date().toISOString() },
+        }));
+        toast.success("Document uploaded", {
+          description: `${type}: ${file.name}`,
+        });
+      } else {
+        toast.error("Upload failed", {
+          description: data.message || data.detail || "Please try again.",
+        });
+      }
+    } catch {
+      toast.error("Upload failed", { description: "Network error. Please try again." });
     }
   };
 
@@ -222,7 +266,9 @@ function ApplyContent() {
         <div className="mx-auto max-w-3xl px-4 py-8 lg:py-12">
           <div className="mb-8">
             <div className="flex items-center gap-3 mb-4">
-              <span className="text-3xl" role="img" aria-label={`${country.name} flag`}>{country.flag}</span>
+              {"flag" in country && country.flag && (
+                <span className="text-3xl" role="img" aria-label={`${country.name} flag`}>{country.flag}</span>
+              )}
               <div>
                 <h1 className="text-2xl font-bold text-foreground">Apply to Study in {country.name}</h1>
                 <p className="text-sm text-muted-foreground">Step {step} of {TOTAL_STEPS}</p>
@@ -298,32 +344,48 @@ function ApplyContent() {
                 <div className="flex flex-col gap-2">
                   <p className="text-sm font-medium text-foreground">Required Documents:</p>
                   {documentTypes.map((doc) => {
-                    const isUploaded = uploadedDocs.includes(doc);
+                    const record = uploadedDocRecords[doc];
+                    const isUploaded = !!record;
                     const isUploading = uploadingType === doc;
                     return (
                       <div
                         key={doc}
-                        className="flex items-center justify-between rounded-lg border border-border bg-background p-3"
+                        className={`rounded-lg border p-3 ${isUploaded ? "border-green-500/30 bg-green-500/5" : "border-border bg-background"}`}
                       >
-                        <div className="flex items-center gap-3">
-                          <FileText className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm text-foreground">{doc}</span>
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            <span className="text-sm font-medium text-foreground">{doc}</span>
+                          </div>
+                          {isUploaded ? (
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Badge className="bg-green-600 text-white gap-1">
+                                <CheckCircle2 className="h-3 w-3" /> Uploaded
+                              </Badge>
+                            </div>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled={!!uploadingType}
+                              onClick={() => triggerUpload(doc)}
+                              className="text-foreground shrink-0"
+                            >
+                              {isUploading ? (
+                                <span className="flex items-center gap-1">
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…
+                                </span>
+                              ) : (
+                                "Upload"
+                              )}
+                            </Button>
+                          )}
                         </div>
-                        {isUploaded ? (
-                          <Badge className="bg-stc-success text-white">
-                            <Check className="mr-1 h-3 w-3" /> Uploaded
-                          </Badge>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={!!uploadingType}
-                            onClick={() => triggerUpload(doc)}
-                            className="text-foreground"
-                          >
-                            {isUploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Upload"}
-                          </Button>
+                        {record && (
+                          <p className="mt-2 ml-7 text-xs text-muted-foreground truncate" title={record.file_name}>
+                            {record.file_name} · {new Date(record.upload_date).toLocaleDateString()}
+                          </p>
                         )}
                       </div>
                     );
@@ -397,32 +459,27 @@ function ApplyContent() {
               </Card>
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-foreground">Payment Method</CardTitle>
+                  <CardTitle className="text-foreground flex items-center gap-2">
+                    <Landmark className="h-5 w-5" />
+                    Payment by Bank Transfer
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
-                  {[
-                    { name: "Credit/Debit Card", icon: CreditCard },
-                    { name: "PayPal", icon: Shield },
-                    { name: "Bank Transfer", icon: FileText },
-                  ].map((method) => (
-                    <label
-                      key={method.name}
-                      className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-background p-4 hover:bg-secondary/50 transition-colors"
-                    >
-                      <input type="radio" name="payment" className="accent-[#2980B9]" />
-                      <method.icon className="h-5 w-5 text-muted-foreground" />
-                      <span className="text-sm font-medium text-foreground">{method.name}</span>
-                    </label>
-                  ))}
-                  <div className="flex items-start gap-2 mt-2">
+                  <p className="text-sm text-muted-foreground">
+                    Please pay the total amount by bank transfer using the details below. Use your full name and application ID as the payment reference.
+                  </p>
+                  <div className="rounded-lg border border-border bg-muted/30 p-4 font-mono text-sm space-y-2">
+                    <p><span className="text-muted-foreground">Bank name:</span> STC Bank (placeholder)</p>
+                    <p><span className="text-muted-foreground">Account name:</span> STC – STEAM CONSULTING</p>
+                    <p><span className="text-muted-foreground">IBAN:</span> DE00 0000 0000 0000 0000 00</p>
+                    <p><span className="text-muted-foreground">BIC / SWIFT:</span> STCBDEFFXXX</p>
+                    <p><span className="text-muted-foreground">Reference:</span> Your full name + application ID</p>
+                  </div>
+                  <div className="flex items-start gap-2">
                     <Checkbox id="terms" checked={agreed} onCheckedChange={(c) => setAgreed(c === true)} />
                     <Label htmlFor="terms" className="text-xs text-muted-foreground leading-relaxed">
-                      I agree to the Terms & Conditions and understand that the application fee is non-refundable.
+                      I agree to the Terms & Conditions. I understand that I must pay by bank transfer using the reference above and that my application will be processed only after payment is received. The application fee is non-refundable.
                     </Label>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <Shield className="h-4 w-4 text-stc-success" />
-                    Secure payment processed by our trusted payment partner
                   </div>
                 </CardContent>
               </Card>

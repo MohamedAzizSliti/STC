@@ -1,18 +1,23 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { GraduationCap, Briefcase, Building2, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
-const portals = [
+const portalConfig = (studyCount: number) => [
   {
     title: "Studies",
     subtitle: "Study Abroad Portal",
-    description: "Explore study opportunities across 9+ countries. Find the perfect university program and get guided through the entire application process.",
+    description: studyCount > 0
+      ? `Explore study opportunities across ${studyCount}+ countries. Find the perfect university program and get guided through the entire application process.`
+      : "Explore study opportunities. Find the perfect university program and get guided through the entire application process.",
     icon: GraduationCap,
     href: "/etudes",
     color: "bg-stc-blue",
     lightColor: "bg-stc-blue/10",
     textColor: "text-stc-blue",
-    features: ["9+ Countries", "Application Support", "Visa Guidance"],
+    features: studyCount > 0 ? [`${studyCount}+ Countries`, "Application Support", "Visa Guidance"] : ["Application Support", "Visa Guidance"],
   },
   {
     title: "Job Seekers",
@@ -39,6 +44,14 @@ const portals = [
 ];
 
 export function HomePortals() {
+  const [studyCount, setStudyCount] = useState(0);
+  useEffect(() => {
+    fetch("/api/studies")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setStudyCount(Array.isArray(data) ? data.length : 0));
+  }, []);
+  const portals = portalConfig(studyCount);
+
   return (
     <section className="py-16 lg:py-24 bg-background">
       <div className="mx-auto max-w-7xl px-4 lg:px-8">

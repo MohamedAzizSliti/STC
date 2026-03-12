@@ -29,7 +29,9 @@ export function CountryDetail({ country, open, onClose }: CountryDetailProps) {
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
           <div className="absolute bottom-4 left-6 right-6">
             <div className="flex items-center gap-3">
-              <span className="text-4xl" role="img" aria-label={`${country.name} flag`}>{country.flag}</span>
+              {"flag" in country && country.flag && (
+                <span className="text-4xl" role="img" aria-label={`${country.name} flag`}>{country.flag}</span>
+              )}
               <div>
                 <DialogTitle className="text-2xl font-bold text-white">{country.name}</DialogTitle>
                 <p className="text-sm text-white/80">{country.description}</p>

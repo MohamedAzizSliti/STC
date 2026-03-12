@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceRoleClient } from "@/lib/supabase/server";
 
 const BUCKET = "documents";
 const MAX_SIZE = 10 * 1024 * 1024; // 10MB
@@ -58,7 +58,8 @@ export async function POST(request: Request) {
   const path = `${user.id}/${safeName}`;
 
   const arrayBuffer = await file.arrayBuffer();
-  const { error: uploadError } = await supabase.storage
+  const admin = await createServiceRoleClient();
+  const { error: uploadError } = await admin.storage
     .from(BUCKET)
     .upload(path, arrayBuffer, {
       contentType: file.type,
@@ -67,12 +68,15 @@ export async function POST(request: Request) {
 
   if (uploadError) {
     return NextResponse.json(
-      { message: uploadError.message },
+      {
+        message: "Storage upload failed. Ensure the 'documents' bucket exists in Supabase Dashboard > Storage.",
+        detail: uploadError.message,
+      },
       { status: 500 }
     );
   }
 
-  const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  const { data: urlData } = admin.storage.from(BUCKET).getPublicUrl(path);
   const fileUrl = urlData.publicUrl;
 
   const { data: doc, error: insertError } = await supabase
@@ -89,7 +93,7 @@ export async function POST(request: Request) {
 
   if (insertError) {
     return NextResponse.json(
-      { message: insertError.message },
+      { message: "Failed to save document record.", detail: insertError.message },
       { status: 500 }
     );
   }
