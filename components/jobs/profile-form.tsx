@@ -34,11 +34,12 @@ interface ProfileFormProps {
   };
   onChange: (data: ProfileFormProps["data"]) => void;
   onComplete: () => void;
+  saving?: boolean;
 }
 
 const TOTAL_STEPS = 4;
 
-export function ProfileForm({ data, onChange, onComplete }: ProfileFormProps) {
+export function ProfileForm({ data, onChange, onComplete, saving }: ProfileFormProps) {
   const [step, setStep] = useState(1);
   const [skillInput, setSkillInput] = useState("");
   const [titleInput, setTitleInput] = useState("");
@@ -121,7 +122,8 @@ export function ProfileForm({ data, onChange, onComplete }: ProfileFormProps) {
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="jem">Email</Label>
-                <Input id="jem" type="email" value={data.email} onChange={(e) => updateField("email", e.target.value)} placeholder="your@email.com" />
+                <Input id="jem" type="email" value={data.email} readOnly placeholder="your@email.com" className="bg-muted" />
+                <p className="text-xs text-muted-foreground">Email is from your account and cannot be changed here.</p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="jph">Phone</Label>
@@ -352,8 +354,8 @@ export function ProfileForm({ data, onChange, onComplete }: ProfileFormProps) {
               Next Step <ArrowRight className="h-4 w-4" />
             </Button>
           ) : (
-            <Button onClick={onComplete} className="gap-2 bg-stc-green text-white hover:bg-stc-green/90">
-              Preview Profile <Check className="h-4 w-4" />
+            <Button onClick={onComplete} className="gap-2 bg-stc-green text-white hover:bg-stc-green/90" disabled={saving}>
+              {saving ? "Saving…" : "Save & preview profile"} <Check className="h-4 w-4" />
             </Button>
           )}
         </div>
